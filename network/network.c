@@ -15,6 +15,13 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
+/* network.c
+ *
+ * This file contains some convenient functions for TCP/UDP communication which
+ * avoid the short read/short write problem, as well as a function to
+ * packetize incoming TCP streams.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -71,11 +78,14 @@ ssize_t tcp_read_bytes(int sock, char *msg_buf, size_t bytes)
 	return bread;
 }
 
+/*
+ * Tunable TCP packetization
+ */
 ssize_t tcp_read_msg(int sock, char *buf, size_t len)
 {
 	size_t i;
 
-	/* delimiter-matching state */
+	/* delimiter-matching state: tune this as appropriate */
 	struct {
 		const char * const str;
 		const size_t len;

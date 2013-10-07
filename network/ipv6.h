@@ -18,6 +18,11 @@
 #ifndef _IPV6_H
 #define _IPV6_H
 
+/* ipv6.h
+ *
+ * IPV6 compatibility functions.
+ */
+
 #include <string.h> /* memcmp */
 #include <sys/socket.h>
 #include <netinet/in.h>

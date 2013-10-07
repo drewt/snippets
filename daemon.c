@@ -20,6 +20,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+/*
+ * Do all the unix magic necessary to become a background process, and
+ * optionally redirect stdout and stderr to a log file.
+ */
 void daemonize(const char *log_file)
 {
 	pid_t pid, sid;
@@ -34,8 +38,13 @@ void daemonize(const char *log_file)
 
 	umask(0);
 
-	freopen(log_file, "w", stdout);
-	freopen(log_file, "w", stderr);
+	if (log_file != NULL) {
+		freopen(log_file, "w", stdout);
+		freopen(log_file, "w", stderr);
+	} else {
+		fclose(stdout);
+		fclose(stderr);
+	}
 	fclose(stdin);
 
 	sid = setsid();

@@ -22,11 +22,15 @@
 #define HT_SIZE 10
 #endif
 
+/*
+ * The delta list stores pointers to data_t.  This may be changed to another
+ * data type if a bit of type-safety is in order.
+ */
 typedef void data_t;
 
 struct delta_list {
 	unsigned int resolution;       // seconds per tick
-	unsigned int interval;         // expiration inverval (measured in ticks)
+	unsigned int interval;         // ticks per time-to-live
 	unsigned int size;             // number of elements in the list
 	unsigned int delta;            // sum of all individual deltas
 

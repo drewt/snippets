@@ -32,10 +32,13 @@
 #include "network.h"
 #include "server.h"
 
-#define BACKLOG 10
+/* server.c
+ *
+ * This file implements threaded, message-oriented TCP/UDP servers.  The TCP
+ * server depends on the packetization function in network.c.
+ */
 
-/* XXX: change this!!! */
-#define LOG_FILE_PATH "/tmp/logfile"
+#define BACKLOG 10
 
 int tcp_server_init(char *port)
 {

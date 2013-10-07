@@ -15,6 +15,21 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
+/* 
+ * deltalist.c
+ *
+ * This file implements a delta list (backed by a hash table).  This is a
+ * linked list in which each member of the list has an associated time-to-live,
+ * with the property that updating the timers is O(1).  This is accomplished by
+ * storing at each node the delta relative to the previous node in the list.
+ * That is, for a node with index N and time-to-live T(N), the delta D(N) is
+ * equal to T(N) - T(N - 1), where T(-1) = 0.  Or equavalently, D(N) is equal
+ * to T(N) minus D(n) for all 0 <= n < N (this is how deltas are actually
+ * calculated).  Each time interval or "tick", the delta of the first node is
+ * decremented.  When it reaches 0, a callback is executed and the node is
+ * removed from the list.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
