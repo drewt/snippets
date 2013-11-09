@@ -18,14 +18,21 @@
 #ifndef _NETWORK_H
 #define _NETWORK_H
 
-#include <unistd.h> /* ssize_t */
+#include <unistd.h>     /* ssize_t */
+#include <sys/uio.h>    /* iovec */
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-ssize_t tcp_send_bytes(int sock, const char *buf, size_t len);
-ssize_t tcp_sendf(int sock, size_t size, const char *fmt, ...);
 ssize_t tcp_read_bytes(int sock, char *msg_buf, size_t bytes);
-ssize_t tcp_read_msg(int sock, char *buf, size_t len);
+ssize_t tcp_send_bytes(int sock, const char *buf, size_t len);
+ssize_t tcp_send_vector(int sock, struct iovec *vec, size_t len);
+ssize_t tcp_sendf(int sock, size_t size, const char *fmt, ...);
+
+ssize_t netstring_read(int sock, char **dst);
+ssize_t netstring_send(int sock, size_t size, const char *msg);
+ssize_t netstring_send_vector(int sock, struct iovec *vec, size_t len);
+ssize_t netstring_sendf(int sock, size_t size, const char *fmt, ...);
+
 int udp_send(const struct sockaddr *addr, size_t len, const char *msg);
 int udp_sendf(const struct sockaddr *addr, size_t size, const char *fmt, ...);
 
