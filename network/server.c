@@ -27,6 +27,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <syslog.h>
 #include <pthread.h>
 
 #include "network.h"
@@ -53,7 +54,7 @@ int tcp_server_init(char *port)
 	hints.ai_flags    = AI_PASSIVE;
 
 	if ((rc = getaddrinfo(NULL, port, &hints, &servinfo))) {
-		fprintf(stderr, "tcpserver: getaddrinfo: %s\n", gai_strerror(rc));
+		syslog(LOG_EMERG, "getaddrinfo: %s\n", gai_strerror(rc));
 		exit(EXIT_FAILURE);
 	}
 
@@ -61,19 +62,19 @@ int tcp_server_init(char *port)
 	for (p = servinfo; p; p = p->ai_next) {
 		sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 		if (sockfd == -1) {
-			perror("tcpserver: socket");
+			syslog(LOG_ERR, "socket: %s\n", strerror(errno));
 			continue;
 		}
 
 		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
 				sizeof(int)) == -1) {
-			perror("tcpserver: setsockopt");
+			syslog(LOG_EMERG, "setsockopt: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
 		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
 			close(sockfd);
-			perror("tcpserver: bind");
+			syslog(LOG_ERR, "bind: %s\n", strerror(errno));
 			continue;
 		}
 
@@ -88,7 +89,7 @@ int tcp_server_init(char *port)
 	freeaddrinfo(servinfo);
 
 	if (listen(sockfd, BACKLOG) == -1) {
-		perror("tcpserver: listen");
+		syslog(LOG_EMERG, "failed to bind\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -111,7 +112,7 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*))
 		sin_size = sizeof(targ->addr);
 		targ->sock = accept(sock, (struct sockaddr*) &targ->addr, &sin_size);
 		if (targ->sock == -1) {
-			perror("accept");
+			syslog(LOG_ERR, "accept: %s\n", strerror(errno));
 			free(targ);
 			continue;
 		}
@@ -119,7 +120,7 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*))
 		/* close connection if thread limit reached */
 		pthread_mutex_lock(&num_threads_lock);
 		if (num_threads >= max_threads) {
-			fprintf(stderr, "thread limit reached; refusing connection\n");
+			syslog(LOG_WARNING, "thread limit reached\n");
 			pthread_mutex_unlock(&num_threads_lock);
 			close(targ->sock);
 			free(targ);
@@ -132,15 +133,15 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*))
 		setsockopt(targ->sock, SOL_SOCKET, SO_RCVTIMEO, (char*) &tv,
 				sizeof(tv));
 
-#ifdef PSNETLOG
+#ifdef VERBOSE_LOG
 		inet_ntop(targ->addr.ss_family,
 				get_in_addr((struct sockaddr*) &targ->addr),
 				targ->paddr, sizeof targ->paddr);
-		printf("C %s\n", targ->paddr);
+		syslog(LOG_INFO, "connection from %s\n", targ->paddr);
 #endif
 		/* create a new thread to service the connection */
 		if (pthread_create(&tid, NULL, cb, targ))
-			perror("pthread_create");
+			syslog(LOG_ERR, "pthread_create\n");
 		else
 			pthread_detach(tid);
 	}
@@ -159,26 +160,26 @@ int udp_server_init(char *port)
 	hints.ai_flags    = AI_PASSIVE;
 
 	if ((rc = getaddrinfo(NULL, port, &hints, &servinfo))) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rc));
+		syslog(LOG_EMERG, "getaddrinfo: %s\n", gai_strerror(rc));
 		exit(EXIT_FAILURE);
 	}
 
 	for (p = servinfo; p; p = p->ai_next) {
 		sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 		if (sockfd == -1) {
-			perror("socket");
+			syslog(LOG_ERR, "socket: %s\n", strerror(errno));
 			continue;
 		}
 
 		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
 				sizeof(int)) == -1) {
-			perror("setsockopt");
+			syslog(LOG_EMERG, "setsockopt: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
 		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
 			close(sockfd);
-			perror("bind");
+			syslog(LOG_ERR, "bind: %s\n", strerror(errno));
 			continue;
 		}
 
@@ -186,7 +187,7 @@ int udp_server_init(char *port)
 	}
 
 	if (!p) {
-		fprintf(stderr, "server: failed to bind\n");
+		syslog(LOG_EMERG, "failed to bind\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -212,7 +213,7 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 		rc = recvfrom(sock, msg->msg, MSG_MAX-1, 0,
 				(struct sockaddr*) &msg->addr, &sin_size);
 		if (rc == -1) {
-			perror("recvfrom");
+			syslog(LOG_ERR, "recvfrom: %s\n", strerror(errno));
 			continue;
 		}
 		msg->msg[rc] = '\0';
@@ -220,7 +221,7 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 
 		pthread_mutex_lock(&num_threads_lock);
 		if (num_threads >= max_threads) {
-			fprintf(stderr, "thread limit reached: discarding message\n");
+			syslog(LOG_WARNING, "thread limit reached\n");
 			pthread_mutex_unlock(&num_threads_lock);
 			free(msg);
 			continue;
@@ -229,15 +230,15 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 		num_threads++;
 		pthread_mutex_unlock(&num_threads_lock);
 
-#ifdef PSNETLOG
+#ifdef VERBOSE_LOG
 		inet_ntop(msg->addr.ss_family,
 				get_in_addr((struct sockaddr*) &msg->addr),
 				msg->paddr, sizeof msg->paddr);
-		printf("M %s\n", msg->paddr);
+		syslog(LOG_INFO, "message from %s\n", targ->paddr);
 #endif
 
 		if (pthread_create(&tid, NULL, cb, msg))
-			perror("pthread_create");
+			syslog(LOG_ERR, "pthread_create\n");
 		else
 			pthread_detach(tid);
 	}
