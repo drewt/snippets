@@ -35,11 +35,13 @@
 
 /* server.c
  *
- * This file implements threaded, message-oriented TCP/UDP servers.  The TCP
- * server depends on the packetization function in network.c.
+ * This file implements threaded TCP/UDP servers.
  */
 
 #define BACKLOG 10
+
+static int num_threads;
+static pthread_mutex_t num_threads_lock;
 
 int tcp_server_init(char *port)
 {
@@ -107,6 +109,7 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*))
 	for (;;) {
 
 		targ = malloc(sizeof(struct msg_info));
+		targ->socktype = SOCK_TCP;
 
 		/* wait for a connection */
 		sin_size = sizeof(targ->addr);
@@ -120,8 +123,8 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*))
 		/* close connection if thread limit reached */
 		pthread_mutex_lock(&num_threads_lock);
 		if (num_threads >= max_threads) {
-			syslog(LOG_WARNING, "thread limit reached\n");
 			pthread_mutex_unlock(&num_threads_lock);
+			syslog(LOG_WARNING, "thread limit reached\n");
 			close(targ->sock);
 			free(targ);
 			continue;
@@ -207,13 +210,17 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 	pthread_t tid;
 
 	for(;;) {
-		msg = malloc(sizeof(struct msg_info));
 		sin_size = sizeof(struct sockaddr_in);
+		msg = malloc(sizeof(struct msg_info));
+		msg->msg = malloc(MSG_MAX);
+		msg->socktype = SOCK_UDP;
 
 		rc = recvfrom(sock, msg->msg, MSG_MAX-1, 0,
 				(struct sockaddr*) &msg->addr, &sin_size);
 		if (rc == -1) {
 			syslog(LOG_ERR, "recvfrom: %s\n", strerror(errno));
+			free(msg->msg);
+			free(msg);
 			continue;
 		}
 		msg->msg[rc] = '\0';
@@ -221,8 +228,9 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 
 		pthread_mutex_lock(&num_threads_lock);
 		if (num_threads >= max_threads) {
-			syslog(LOG_WARNING, "thread limit reached\n");
 			pthread_mutex_unlock(&num_threads_lock);
+			syslog(LOG_WARNING, "thread limit reached\n");
+			free(msg->msg);
 			free(msg);
 			continue;
 		}
@@ -243,4 +251,20 @@ _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*))
 			pthread_detach(tid);
 	}
 	close(sock);
+}
+
+_Noreturn void service_exit(struct msg_info *msg)
+{
+	close(msg->sock);
+#ifdef VERBOSE_LOG
+	syslog(LOG_INFO, "connection from %s closed\n", fdsa->paddr);
+#endif
+	if (msg->socktype == SOCK_UDP)
+		free(msg->msg);
+	free(msg);
+
+	pthread_mutex_lock(&num_threads_lock);
+	num_threads--;
+	pthread_mutex_unlock(&num_threads_lock);
+	pthread_exit(NULL);
 }

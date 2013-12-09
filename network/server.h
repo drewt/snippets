@@ -18,9 +18,15 @@
 #ifndef _SERVER_H
 #define _SERVER_H
 
+#include <netinet/in.h>
 #include <pthread.h>
 
 #define MSG_MAX 512
+
+enum {
+	SOCK_TCP,
+	SOCK_UDP
+};
 
 /*
  * A UDP or TCP message from a client.
@@ -28,14 +34,11 @@
 struct msg_info {
 	int sock;
 	int socktype;
+	char *msg;
 	size_t len;
 	struct sockaddr_storage addr;
-	char msg[MSG_MAX];
 	char paddr[INET6_ADDRSTRLEN];
 };
-
-extern int num_threads;
-extern pthread_mutex_t num_threads_lock;
 
 int tcp_server_init(char *port);
 
@@ -44,5 +47,7 @@ _Noreturn void tcp_server_main(int sock, int max_threads, void*(*cb)(void*));
 int udp_server_init(char *port);
 
 _Noreturn void udp_server_main(int sock, int max_threads, void *(*cb)(void*));
+
+_Noreturn void service_exit(struct msg_info *msg);
 
 #endif
